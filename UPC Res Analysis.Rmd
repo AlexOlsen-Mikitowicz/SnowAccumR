@@ -1,0 +1,1777 @@
+---
+title: "UPC Resolution Analysis"
+author: "Alex Olsen-Mikitowicz"
+date: "2023-04-05"
+output: html_document
+---
+
+
+```{r}
+
+library(tidyverse)
+library(dplyr)
+library(raster)
+library(tiff)
+library(rgdal)
+library(purrr)
+library(fs)
+library(xgboost)
+library(igraph)
+library(Ckmeans.1d.dp)
+library(caret)
+library(SHAPforxgboost)
+library(ModelMetrics)
+library(lubridate)
+library(hydroGOF)
+library(shapviz)
+
+```
+
+```{r create list of lidar scan dates}
+
+#create list of dates for use later in analysis
+dates <- list(20191115, 20191202, 20200108, 20200124, 20200211, 20200225, 20200312, 20200324)
+
+date_list <- dates %>%
+  map(lubridate::ymd)
+
+```
+
+```{r dynamic read datasets}
+
+#set working directory to location of dynamically differenced datsets
+dynamic_dir <- 'C:/Users/aolse/Desktop/Research/Raster Data/Meeker Data/Upper Piceance Creek/QGIS Processing/R Processing/Point Cloud Derived/Dynamic/'
+
+#10cm rasters
+d_10cm_D1 <- '10cm/D1'
+d_10cm_D2 <- '10cm/D2'
+d_10cm_D3 <- '10cm/D3'
+d_10cm_D4 <- '10cm/D4'
+d_10cm_D5 <- '10cm/D5'
+d_10cm_D6 <- '10cm/D6'
+d_10cm_D7 <- '10cm/D7'
+d_10cm_D8 <- '10cm/D8'
+
+d_list_10cm <- list(D1 = paste0(dynamic_dir, d_10cm_D1),
+                      D2 = paste0(dynamic_dir, d_10cm_D2),
+                      D3 = paste0(dynamic_dir, d_10cm_D3),
+                      D4 = paste0(dynamic_dir, d_10cm_D4),
+                      D5 = paste0(dynamic_dir, d_10cm_D5),
+                      D6 = paste0(dynamic_dir, d_10cm_D6),
+                      D7 = paste0(dynamic_dir, d_10cm_D7),
+                      D8 = paste0(dynamic_dir, d_10cm_D8))
+
+#10cm cropped rasters
+d_10cm_crop_D1 <- '10cm_clip/D1'
+d_10cm_crop_D2 <- '10cm_clip/D2'
+d_10cm_crop_D3 <- '10cm_clip/D3'
+d_10cm_crop_D4 <- '10cm_clip/D4'
+d_10cm_crop_D5 <- '10cm_clip/D5'
+d_10cm_crop_D6 <- '10cm_clip/D6'
+d_10cm_crop_D7 <- '10cm_clip/D7'
+d_10cm_crop_D8 <- '10cm_clip/D8'
+
+d_list_10cm_crop <- list(D1 = paste0(dynamic_dir, d_10cm_crop_D1),
+                           D2 = paste0(dynamic_dir, d_10cm_crop_D2),
+                           D3 = paste0(dynamic_dir, d_10cm_crop_D3),
+                           D4 = paste0(dynamic_dir, d_10cm_crop_D4),
+                           D5 = paste0(dynamic_dir, d_10cm_crop_D5),
+                           D6 = paste0(dynamic_dir, d_10cm_crop_D6),
+                           D7 = paste0(dynamic_dir, d_10cm_crop_D7),
+                           D8 = paste0(dynamic_dir, d_10cm_crop_D8))
+
+#5cm rasters
+d_5cm_D1 <- '5cm/D1'
+d_5cm_D2 <- '5cm/D2'
+d_5cm_D3 <- '5cm/D3'
+d_5cm_D4 <- '5cm/D4'
+d_5cm_D5 <- '5cm/D5'
+d_5cm_D6 <- '5cm/D6'
+d_5cm_D7 <- '5cm/D7'
+d_5cm_D8 <- '5cm/D8'
+
+d_list_5cm <- list(D1 = paste0(dynamic_dir, d_5cm_D1),
+                     D2 = paste0(dynamic_dir, d_5cm_D2),
+                     D3 = paste0(dynamic_dir, d_5cm_D3),
+                     D4 = paste0(dynamic_dir, d_5cm_D4),
+                     D5 = paste0(dynamic_dir, d_5cm_D5),
+                     D6 = paste0(dynamic_dir, d_5cm_D6),
+                     D7 = paste0(dynamic_dir, d_5cm_D7),
+                     D8 = paste0(dynamic_dir, d_5cm_D8))
+
+#5cm cropped rasters
+d_5cm_crop_D1 <- '5cm_clip/D1'
+d_5cm_crop_D2 <- '5cm_clip/D2'
+d_5cm_crop_D3 <- '5cm_clip/D3'
+d_5cm_crop_D4 <- '5cm_clip/D4'
+d_5cm_crop_D5 <- '5cm_clip/D5'
+d_5cm_crop_D6 <- '5cm_clip/D6'
+d_5cm_crop_D7 <- '5cm_clip/D7'
+d_5cm_crop_D8 <- '5cm_clip/D8'
+
+d_list_5cm_crop <- list(D1 = paste0(dynamic_dir, d_5cm_crop_D1),
+                          D2 = paste0(dynamic_dir, d_5cm_crop_D2),
+                          D3 = paste0(dynamic_dir, d_5cm_crop_D3),
+                          D4 = paste0(dynamic_dir, d_5cm_crop_D4),
+                          D5 = paste0(dynamic_dir, d_5cm_crop_D5),
+                          D6 = paste0(dynamic_dir, d_5cm_crop_D6),
+                          D7 = paste0(dynamic_dir, d_5cm_crop_D7),
+                          D8 = paste0(dynamic_dir, d_5cm_crop_D8))
+
+#1cm rasters
+d_1cm_D1 <- '1cm/D1'
+d_1cm_D2 <- '1cm/D2'
+d_1cm_D3 <- '1cm/D3'
+d_1cm_D4 <- '1cm/D4'
+d_1cm_D5 <- '1cm/D5'
+d_1cm_D6 <- '1cm/D6'
+d_1cm_D7 <- '1cm/D7'
+d_1cm_D8 <- '1cm/D8'
+
+d_list_1cm <- list(D1 = paste0(dynamic_dir, d_1cm_D1),
+                     D2 = paste0(dynamic_dir, d_1cm_D2),
+                     D3 = paste0(dynamic_dir, d_1cm_D3),
+                     D4 = paste0(dynamic_dir, d_1cm_D4),
+                     D5 = paste0(dynamic_dir, d_1cm_D5),
+                     D6 = paste0(dynamic_dir, d_1cm_D6),
+                     D7 = paste0(dynamic_dir, d_1cm_D7),
+                     D8 = paste0(dynamic_dir, d_1cm_D8))
+
+#1cm cropped rasters
+d_1cm_crop_D1 <- '1cm_clip/D1'
+d_1cm_crop_D2 <- '1cm_clip/D2'
+d_1cm_crop_D3 <- '1cm_clip/D3'
+d_1cm_crop_D4 <- '1cm_clip/D4'
+d_1cm_crop_D5 <- '1cm_clip/D5'
+d_1cm_crop_D6 <- '1cm_clip/D6'
+d_1cm_crop_D7 <- '1cm_clip/D7'
+d_1cm_crop_D8 <- '1cm_clip/D8'
+
+d_list_1cm_crop <- list(D1 = paste0(dynamic_dir, d_1cm_crop_D1),
+                          D2 = paste0(dynamic_dir, d_1cm_crop_D2),
+                          D3 = paste0(dynamic_dir, d_1cm_crop_D3),
+                          D4 = paste0(dynamic_dir, d_1cm_crop_D4),
+                          D5 = paste0(dynamic_dir, d_1cm_crop_D5),
+                          D6 = paste0(dynamic_dir, d_1cm_crop_D6),
+                          D7 = paste0(dynamic_dir, d_1cm_crop_D7),
+                          D8 = paste0(dynamic_dir, d_1cm_crop_D8))
+
+
+#dynamic master list
+d_list_master <- list(d_10cm = d_list_10cm, d_5cm = d_list_5cm, d_1cm = d_list_1cm)
+
+#dynamic crop master list
+d_list_master_crop <- list(d_10cm_crop = d_list_10cm_crop, d_5cm_crop = d_list_5cm_crop, d_1cm_crop = d_list_1cm_crop)
+
+#column names for output dataframes
+d_names <- c('x', 'y', 'Aspect', 'CVA', 'DME', 'DirRel', 'ElevPercent', 'Fetch205', 'HorzAng', 'MCurve', 'Hillshade', 'Northness', 'RelAspect', 'RTP', 'Slope', 'TRI', 'Depth')
+d8_names <- c('x', 'y', 'Aspect', 'CVA', 'DME', 'DirRel', 'ElevPercent', 'Fetch205', 'HorzAng', 'MCurve', 'Hillshade', 'Northness', 'RelAspect', 'RTP', 'Slope', 'TRI')
+
+#iterate through list and create dataframes
+d_list <- list()
+d_stack <- list()
+d_df <- list()
+d_depth_list <- list()
+
+cntrl_res = '5cm' #1cm/5cm/10cm
+rstr_type = 'Crop'#Full/Crop
+
+for (i in seq_along(d_list_master_crop$d_5cm_crop)){#control raster pointer here
+   setwd(d_list_master_crop$d_5cm_crop[[i]])#and here control raster pointer
+   d_list[[i]] <- list.files(pattern = '.tif')
+   d_stack[[i]] <- stack(d_list[[i]])
+   d_df[[i]] <- na.omit(as.data.frame(d_stack[[i]], xy=TRUE))
+   if (i==8) {
+    colnames(d_df[[i]]) <- d8_names
+    } else {
+    colnames(d_df[[i]]) <- d_names
+    d_depth_list[[i]] <- mean(na.omit(d_df[[i]]$Depth))
+    }
+}
+
+```
+
+```{r dynamic predecessor processing}
+
+set.seed(42)
+
+#creates empty list for storage
+d_partition <- list()
+
+#partition data for testing and training, no replacement
+for (i in (1:7)){
+  d_80 <- d_df[[i]] %>%
+    sample_frac(0.8)
+  d_20 <- anti_join(d_df[[i]], d_80)
+  d_partition[[i]] <- list(d_80, d_20)
+}
+
+#creat empty lists for holding the predictand (y) and predictor (x) variables
+d_x <- list()
+d_y <- list()
+
+#split data into train and test datasets and partition, result in a list of dataframes
+for (i in seq_along(d_partition)){
+  d_train_y <- d_partition[[i]][[1]]$Depth
+  d_train_x <- as.matrix(d_partition[[i]][[1]][,3:16])
+  d_test_y <- d_partition[[i]][[2]]$Depth
+  d_test_x <- as.matrix(d_partition[[i]][[2]][,3:16])
+  d_x[[i]] <- list(d_train_x, d_test_x)
+  d_y[[i]] <- list(d_train_y, d_test_y)
+}
+
+#create empty lists for output
+d_xgb_train <- list()
+d_xgb_test <- list()
+d_watchlist <- list()
+d_model_test <- list()
+d_model_final <- list()
+d_model_complex <- list()
+d_model_imp <- list()
+d_iter <- list()
+d_pred <- list()
+d_mse <- list()
+d_mae <- list()
+d_rmse <- list()
+d_depths <- list()
+
+#XGB Model
+for (i in seq_along(d_x)){
+  #fit xgboost model to training and testing datasets
+  d_xgb_train[[i]] = xgb.DMatrix(data = d_x[[i]][[1]], label = d_y[[i]][[1]])
+  d_xgb_test[[i]] = xgb.DMatrix(data = d_x[[i]][[2]], label = d_y[[i]][[2]])
+  
+  #define watchlist
+  d_watchlist[[i]] = list(train=d_xgb_train[[i]], test=d_xgb_test[[i]])
+  
+  #fit test xgboost model and display model performance
+  d_model_test[[i]] = xgb.train(data = d_xgb_train[[i]], max.depth = 6, watchlist=d_watchlist[[i]], nrounds = 300, early_stopping_rounds = 3)
+  
+  #use iterations from test model for final model
+  d_iter[[i]] <- d_model_test[[i]]$best_iteration
+  
+  #define final model
+  d_model_final[[i]] = xgboost(data = d_xgb_train[[i]], max.depth = 6, nrounds = d_iter[[i]], verbose = 0)
+  
+  #use model to make estimates from test data
+  d_pred[[i]] = predict(d_model_final[[i]], d_xgb_test[[i]])
+  
+  #model complexity
+  d_model_complex[[i]] = xgb.ggplot.deepness(model=d_model_final[[i]])
+  
+  #model importance
+  d_model_imp[[i]] <- xgb.importance(model=d_model_final[[i]])
+  xgb.ggplot.importance(d_model_imp[[i]])
+  
+  #measure prediction accuracy
+  d_mse[[i]] <- mean((d_y[[i]][[2]] - d_pred[[i]])^2) #mse
+  d_mae[[i]] <- caret::MAE(d_y[[i]][[2]], d_pred[[i]]) #mae
+  d_rmse[[i]] <- caret::RMSE(d_y[[i]][[2]], d_pred[[i]]) #rmse
+  
+}
+
+#save XGB Models
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/XGB Models/Dynamic/d")
+d_model_names <- list('d_m1', 'd_m2', 'd_m3', 'd_m4', 'd_m5', 'd_m6', 'd_m7')
+for (i in seq_along(d_model_final)){
+  xgb.save(d_model_final[[i]], d_model_names[[i]])
+}
+
+#Create depth lists for NSE calculations
+d_depths <- list()
+for (i in seq_along(d_pred)){
+  d_depths[[i]] <- list(d_y[[i]][[2]], d_pred[[i]])
+}
+#save depth list for NSE calcs
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/NSE/Depth Lists")
+saveRDS(d_depths, file="d_depths.RData")
+
+#Plot timeseries
+#attach date from earlier list to importance scores
+d_df_imp <- list()
+
+for (i in seq_along(d_model_imp)){
+  d_df_imp[[i]] = as.data.frame(d_model_imp[[i]]) %>%
+    cbind(Date=date_list[[i]])
+}
+
+#merge data to wide dataframe
+d_imp_long <- bind_rows(d_df_imp)
+
+#plot timeseries
+d_fi <- ggplot(d_imp_long, aes(x=Date, y=Importance, group = Feature, Color = Feature))+
+  geom_point()+
+  geom_line()+
+  scale_x_date(date_labels = '%h')+
+  facet_wrap(~Feature)+
+  ggtitle(paste0('UPC ', cntrl_res, ' ', 'Raster ', rstr_type, ': Feature Importance'))+
+  theme_bw()
+
+#d_fi
+
+```
+
+```{r static read datasets}
+
+#set working directory to location of dynamically differenced datsets
+
+static_dir <- 'C:/Users/aolse/Desktop/Research/Raster Data/Meeker Data/Upper Piceance Creek/QGIS Processing/R Processing/Point Cloud Derived/Static/'
+
+#10cm rasters
+s_10cm_S1 <- '10cm/S1'
+s_10cm_S2 <- '10cm/S2'
+s_10cm_S3 <- '10cm/S3'
+s_10cm_S4 <- '10cm/S4'
+s_10cm_S5 <- '10cm/S5'
+s_10cm_S6 <- '10cm/S6'
+s_10cm_S7 <- '10cm/S7'
+
+s_list_10cm <- list(S1 = paste0(static_dir, s_10cm_S1),
+                     S2 = paste0(static_dir, s_10cm_S2),
+                     S3 = paste0(static_dir, s_10cm_S3),
+                     S4 = paste0(static_dir, s_10cm_S4),
+                     S5 = paste0(static_dir, s_10cm_S5),
+                     S6 = paste0(static_dir, s_10cm_S6),
+                     S7 = paste0(static_dir, s_10cm_S7))
+
+#10cm cropped rasters
+s_10cm_crop_S1 <- '10cm_clip/S1'
+s_10cm_crop_S2 <- '10cm_clip/S2'
+s_10cm_crop_S3 <- '10cm_clip/S3'
+s_10cm_crop_S4 <- '10cm_clip/S4'
+s_10cm_crop_S5 <- '10cm_clip/S5'
+s_10cm_crop_S6 <- '10cm_clip/S6'
+s_10cm_crop_S7 <- '10cm_clip/S7'
+
+s_list_10cm_crop <- list(S1 = paste0(static_dir, s_10cm_crop_S1),
+                          S2 = paste0(static_dir, s_10cm_crop_S2),
+                          S3 = paste0(static_dir, s_10cm_crop_S3),
+                          S4 = paste0(static_dir, s_10cm_crop_S4),
+                          S5 = paste0(static_dir, s_10cm_crop_S5),
+                          S6 = paste0(static_dir, s_10cm_crop_S6),
+                          S7 = paste0(static_dir, s_10cm_crop_S7))
+
+#5cm rasters
+s_5cm_S1 <- '5cm/S1'
+s_5cm_S2 <- '5cm/S2'
+s_5cm_S3 <- '5cm/S3'
+s_5cm_S4 <- '5cm/S4'
+s_5cm_S5 <- '5cm/S5'
+s_5cm_S6 <- '5cm/S6'
+s_5cm_S7 <- '5cm/S7'
+
+s_list_5cm <- list(S1 = paste0(static_dir, s_5cm_S1),
+                     S2 = paste0(static_dir, s_5cm_S2),
+                     S3 = paste0(static_dir, s_5cm_S3),
+                     S4 = paste0(static_dir, s_5cm_S4),
+                     S5 = paste0(static_dir, s_5cm_S5),
+                     S6 = paste0(static_dir, s_5cm_S6),
+                     S7 = paste0(static_dir, s_5cm_S7))
+
+#5cm cropped rasters
+s_5cm_crop_S1 <- '5cm_clip/S1'
+s_5cm_crop_S2 <- '5cm_clip/S2'
+s_5cm_crop_S3 <- '5cm_clip/S3'
+s_5cm_crop_S4 <- '5cm_clip/S4'
+s_5cm_crop_S5 <- '5cm_clip/S5'
+s_5cm_crop_S6 <- '5cm_clip/S6'
+s_5cm_crop_S7 <- '5cm_clip/S7'
+
+s_list_5cm_crop <- list(S1 = paste0(static_dir, s_5cm_crop_S1),
+                          S2 = paste0(static_dir, s_5cm_crop_S2),
+                          S3 = paste0(static_dir, s_5cm_crop_S3),
+                          S4 = paste0(static_dir, s_5cm_crop_S4),
+                          S5 = paste0(static_dir, s_5cm_crop_S5),
+                          S6 = paste0(static_dir, s_5cm_crop_S6),
+                          S7 = paste0(static_dir, s_5cm_crop_S7))
+
+#1cm rasters
+s_1cm_S1 <- '1cm/S1'
+s_1cm_S2 <- '1cm/S2'
+s_1cm_S3 <- '1cm/S3'
+s_1cm_S4 <- '1cm/S4'
+s_1cm_S5 <- '1cm/S5'
+s_1cm_S6 <- '1cm/S6'
+s_1cm_S7 <- '1cm/S7'
+
+s_list_1cm <- list(S1 = paste0(static_dir, s_1cm_S1),
+                     S2 = paste0(static_dir, s_1cm_S2),
+                     S3 = paste0(static_dir, s_1cm_S3),
+                     S4 = paste0(static_dir, s_1cm_S4),
+                     S5 = paste0(static_dir, s_1cm_S5),
+                     S6 = paste0(static_dir, s_1cm_S6),
+                     S7 = paste0(static_dir, s_1cm_S7))
+
+#1cm cropped rasters
+s_1cm_crop_S1 <- '1cm_clip/S1'
+s_1cm_crop_S2 <- '1cm_clip/S2'
+s_1cm_crop_S3 <- '1cm_clip/S3'
+s_1cm_crop_S4 <- '1cm_clip/S4'
+s_1cm_crop_S5 <- '1cm_clip/S5'
+s_1cm_crop_S6 <- '1cm_clip/S6'
+s_1cm_crop_S7 <- '1cm_clip/S7'
+
+s_list_1cm_crop <- list(S1 = paste0(static_dir, s_1cm_crop_S1),
+                          S2 = paste0(static_dir, s_1cm_crop_S2),
+                          S3 = paste0(static_dir, s_1cm_crop_S3),
+                          S4 = paste0(static_dir, s_1cm_crop_S4),
+                          S5 = paste0(static_dir, s_1cm_crop_S5),
+                          S6 = paste0(static_dir, s_1cm_crop_S6),
+                          S7 = paste0(static_dir, s_1cm_crop_S7))
+
+#static master list
+s_list_master <- list(s_10cm = s_list_10cm, s_5cm = s_list_5cm, s_1cm = s_list_1cm)
+
+#static cropped master list
+s_list_master_crop <- list(s_10cm_crop = s_list_10cm_crop, s_5cm_crop = s_list_5cm_crop, s_1cm_crop = s_list_1cm_crop)
+
+#column names for output dataframes
+s_names <- c('x', 'y', 'Aspect', 'CVA', 'DME', 'DirRel', 'ElevPercent', 'Fetch205', 'HorzAng', 'MCurve', 'Hillshade', 'Northness', 'RelAspect', 'RTP', 'Slope', 'TRI', 'Depth')
+
+#iterate through list and create dataframes
+s_list <- list()
+s_stack <- list()
+s_df <- list()
+s_depth_list <- list()
+
+for (i in seq_along(s_list_master_crop$s_5cm_crop)){#control raster input here
+   setwd(s_list_master_crop$s_5cm_crop[[i]]) #control raster input here
+   s_list[[i]] <- list.files(pattern = '.tif')
+   s_stack[[i]] <- stack(s_list[[i]])
+   s_df[[i]] <- na.omit(as.data.frame(s_stack[[i]], xy=TRUE))
+   colnames(s_df[[i]]) <- s_names
+   s_depth_list[[i]] <- mean(na.omit(s_df[[i]]$Depth))
+}
+
+```
+
+```{r static predecessor processing}
+
+set.seed(42)
+
+#creates empty list for storage
+s_partition <- list()
+
+#partition data for testing and training, no replacement
+for (i in seq_along(s_list)){
+  s_80 <- s_df[[i]] %>%
+    sample_frac(0.8)
+  s_20 <- anti_join(s_df[[i]], s_80)
+  s_partition[[i]] <- list(s_80, s_20)
+}
+
+#creat empty lists for holding the predictand (y) and predictor (x) variables
+s_x <- list()
+s_y <- list()
+
+#split data into train and test datasets and partition, result in a list of dataframes
+for (i in seq_along(s_partition)){
+  s_train_y <- s_partition[[i]][[1]]$Depth
+  s_train_x <- as.matrix(s_partition[[i]][[1]][,3:16])
+  s_test_y <- s_partition[[i]][[2]]$Depth
+  s_test_x <- as.matrix(s_partition[[i]][[2]][,3:16])
+  s_x[[i]] <- list(s_train_x, s_test_x)
+  s_y[[i]] <- list(s_train_y, s_test_y)
+}
+
+#create empty lists for output
+s_xgb_train <- list()
+s_xgb_test <- list()
+s_watchlist <- list()
+s_model_test <- list()
+s_model_final <- list()
+s_model_complex <- list()
+s_model_imp <- list()
+s_iter <- list()
+s_pred <- list()
+s_mse <- list()
+s_mae <- list()
+s_rmse <- list()
+
+#XGB Model
+for (i in seq_along(s_x)){
+  #fit xgboost model to training and testing datasets
+  s_xgb_train[[i]] = xgb.DMatrix(data = s_x[[i]][[1]], label = s_y[[i]][[1]])
+  s_xgb_test[[i]] = xgb.DMatrix(data = s_x[[i]][[2]], label = s_y[[i]][[2]])
+  
+  #define watchlist
+  s_watchlist[[i]] = list(train=s_xgb_train[[i]], test=s_xgb_test[[i]])
+  
+  #fit test xgboost model and display model performance
+  s_model_test[[i]] = xgb.train(data = s_xgb_train[[i]], max.depth = 6, watchlist=s_watchlist[[i]], nrounds = 300, early_stopping_rounds = 3)
+  
+  #use iterations from test model for final model
+  s_iter[[i]] <- s_model_test[[i]]$best_iteration
+  
+  #define final model
+  s_model_final[[i]] = xgboost(data = s_xgb_train[[i]], max.depth = 6, nrounds = s_iter[[i]], verbose = 0)
+  
+  #use model to make estimates from test data
+  s_pred[[i]] = predict(s_model_final[[i]], s_xgb_test[[i]])
+  
+  #model complexity
+  s_model_complex[[i]] = xgb.ggplot.deepness(model=s_model_final[[i]])
+  
+  #model importance
+  s_model_imp[[i]] <- xgb.importance(model=s_model_final[[i]])
+  xgb.ggplot.importance(s_model_imp[[i]])
+  
+  #measure prediction accuracy
+  s_mse[[i]] <- mean((s_y[[i]][[2]] - s_pred[[i]])^2) #mse
+  s_mae[[i]] <- caret::MAE(s_y[[i]][[2]], s_pred[[i]]) #mae
+  s_rmse[[i]] <- caret::RMSE(s_y[[i]][[2]], s_pred[[i]]) #rmse
+}
+
+#save XGB models
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/XGB Models/Static/s")
+s_model_names <- list('s_m1', 's_m2', 's_m3', 's_m4', 's_m5', 's_m6', 's_m7')
+for (i in seq_along(s_model_final)){
+  xgb.save(s_model_final[[i]], s_model_names[[i]])
+}
+
+#Create depth lists for NSE calculations
+s_depths <- list()
+for (i in seq_along(s_pred)){
+  s_depths[[i]] <- list(s_y[[i]][[2]], s_pred[[i]])
+}
+#save depth list for NSE calcs
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/NSE/Depth Lists")
+saveRDS(s_depths, file="s_depths.RData")
+
+#plot timeseries
+#attach date from earlier list to importance scores
+s_df_imp <- list()
+
+for (i in seq_along(s_model_imp)){
+  s_df_imp[[i]] = as.data.frame(s_model_imp[[i]]) %>%
+    cbind(Date=date_list[[i]])
+}
+
+#merge data to wide dataframe
+s_imp_long <- bind_rows(s_df_imp)
+
+#plot timeseries
+s_fi <- ggplot(s_imp_long, aes(x=Date, y=Importance, group = Feature, Color = Feature))+
+  geom_point()+
+  geom_line()+
+  scale_x_date(date_labels = '%h')+
+  facet_wrap(~Feature)+
+  ggtitle(paste0('UPC ', cntrl_res, ' ', 'Raster ', rstr_type, ': Feature Importance'))+
+  theme_bw()
+
+#s_fi
+
+```
+
+```{r combined plot timeseries, eval=TRUE}
+
+#combine datasets through new column called regime
+s_imp_long <- s_imp_long %>%
+  mutate(Method = 'Static')
+
+d_imp_long <- d_imp_long %>%
+  mutate(Method = 'Dynamic')
+
+combined_imp <- s_imp_long %>%
+  rbind(d_imp_long)
+
+#Plot both importance values on the same graph for better visualization
+
+ggplot(combined_imp, aes(x=Date, y=Importance, group = Method, color = Method))+
+  geom_point()+
+  geom_line()+
+  xlab('Comparison Date')+
+  scale_x_date(date_labels = "%h")+
+  facet_wrap(~Feature)+
+  ggtitle(paste0('UPC ', cntrl_res, ' ', 'Raster ', rstr_type, ': Feature Importance'))+
+  theme_bw()
+
+plot_title <- paste0(rstr_type,cntrl_res,'All','.png')
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/Time Series")
+ggsave(plot_title)
+```
+
+```{r dynamic trim}
+
+#Filter features with max importance score over 10%
+combined_imp_filt <- combined_imp %>%
+  group_by(Feature, Method) %>%
+  summarize(minImp = min(Importance),
+            maxImp = max(Importance),
+            meanImp = mean(Importance)) %>%
+  filter(., maxImp > 0.1)
+
+trim_names <- combined_imp_filt$Feature %>%
+  unique() %>%
+  append('Depth')
+
+trim_len <- length(trim_names)-1
+
+set.seed(42)
+
+#removing Northness, Aspect, Slope, DME, and Hillshade 
+dt_df <- list()
+for (i in (1:7)){
+  dt_df[[i]] = d_df[[i]] %>%
+  dplyr::select(all_of(trim_names))
+}
+
+#creates empty list for storage
+dt_partition <- list()
+
+#partition data for testing and training, no replacement
+for (i in (1:7)){
+  dt_80 <- dt_df[[i]] %>%
+    sample_frac(0.8)
+  dt_20 <- anti_join(dt_df[[i]], dt_80)
+  dt_partition[[i]] <- list(dt_80, dt_20)
+}
+
+#creat empty lists for holding the predictand (y) and predictor (x) variables
+dt_x <- list()
+dt_y <- list()
+
+#split data into train and test datasets and partition, result in a list of dataframes
+for (i in seq_along(dt_partition)){
+  dt_train_y <- dt_partition[[i]][[1]]$Depth
+  dt_train_x <- as.matrix(dt_partition[[i]][[1]][,1:trim_len])
+  dt_test_y <- dt_partition[[i]][[2]]$Depth
+  dt_test_x <- as.matrix(dt_partition[[i]][[2]][,1:trim_len])
+  dt_x[[i]] <- list(dt_train_x, dt_test_x)
+  dt_y[[i]] <- list(dt_train_y, dt_test_y)
+}
+
+#create empty lists for output
+dt_xgb_train <- list()
+dt_xgb_test <- list()
+dt_watchlist <- list()
+dt_model_test <- list()
+dt_model_final <- list()
+dt_model_complex <- list()
+dt_model_imp <- list()
+dt_iter <- list()
+dt_pred <- list()
+dt_mse <- list()
+dt_mae <- list()
+dt_rmse <- list()
+
+for (i in seq_along(dt_x)){
+  #fit xgboost model to training and testing datasets
+  dt_xgb_train[[i]] = xgb.DMatrix(data = dt_x[[i]][[1]], label = dt_y[[i]][[1]])
+  dt_xgb_test[[i]] = xgb.DMatrix(data = dt_x[[i]][[2]], label = dt_y[[i]][[2]])
+  
+  #define watchlist
+  dt_watchlist[[i]] = list(train=dt_xgb_train[[i]], test=dt_xgb_test[[i]])
+  
+  #fit test xgboost model and display model performance
+  dt_model_test[[i]] = xgb.train(data = dt_xgb_train[[i]], max.depth = 6, watchlist=dt_watchlist[[i]], nrounds = 300, early_stopping_rounds = 3)
+  
+  #use iterations from test model for final model
+  dt_iter[[i]] <- dt_model_test[[i]]$best_iteration
+  
+  #define final model
+  dt_model_final[[i]] = xgboost(data = dt_xgb_train[[i]], max.depth = 6, nrounds = dt_iter[[i]], verbose = 0)
+  
+  #use model to make estimates from test data
+  dt_pred[[i]] = predict(dt_model_final[[i]], dt_xgb_test[[i]])
+  
+  #model complexity
+  dt_model_complex[[i]] = xgb.ggplot.deepness(model=dt_model_final[[i]])
+  
+  #model importance
+  dt_model_imp[[i]] <- xgb.importance(model=dt_model_final[[i]])
+  xgb.ggplot.importance(dt_model_imp[[i]])
+  
+  #measure prediction accuracy
+  dt_mse[[i]] <- mean((dt_y[[i]][[2]] - dt_pred[[i]])^2) #mse
+  dt_mae[[i]] <- caret::MAE(dt_y[[i]][[2]], dt_pred[[i]]) #mae
+  dt_rmse[[i]] <- caret::RMSE(dt_y[[i]][[2]], dt_pred[[i]]) #rmse
+}
+
+#save XGB model
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/XGB Models/Dynamic/dt")
+dt_model_names <- list('dt_m1', 'dt_m2', 'dt_m3', 'dt_m4', 'dt_m5', 'dt_m6', 'dt_m7')
+for (i in seq_along(dt_model_final)){
+  xgb.save(dt_model_final[[i]], dt_model_names[[i]])
+}
+
+#Create depth lists for NSE calculations
+dt_depths <- list()
+for (i in seq_along(dt_pred)){
+  dt_depths[[i]] <- list(dt_y[[i]][[2]], dt_pred[[i]])
+}
+#save depth list for NSE calcs
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/NSE/Depth Lists")
+saveRDS(dt_depths, file="dt_depths.RData")
+
+#Plotting
+#attach date from earlier list to importance scores
+dt_df_imp <- list()
+
+for (i in seq_along(dt_model_imp)){
+  dt_df_imp[[i]] = as.data.frame(dt_model_imp[[i]]) %>%
+    cbind(Date=date_list[[i]])
+}
+
+#merge data to wide dataframe
+dt_imp_long <- bind_rows(dt_df_imp)
+
+#plot timeseries
+dt_fi <- ggplot(dt_imp_long, aes(x=Date, y=Importance, group = Feature, Color = Feature))+
+  geom_point()+
+  geom_line()+
+  scale_x_date(date_labels = '%h')+
+  facet_wrap(~Feature)+
+  ggtitle(paste0('UPC ', cntrl_res, ' ', 'Raster ', rstr_type, ': Feature Importance'))+
+  theme_bw()
+
+#dt_fi
+```
+
+```{r trim static xgboost model in loop}
+set.seed(42)
+
+#Remove variables
+st_df <- list()
+for (i in seq_along(s_df)){
+  st_df[[i]] = s_df[[i]] %>%
+  dplyr::select(all_of(trim_names))
+}
+
+#creates empty list for storage
+st_partition <- list()
+
+#partition data for testing and training, no replacement
+for (i in seq_along(st_df)){
+  st_80 <- st_df[[i]] %>%
+    sample_frac(0.8)
+  st_20 <- anti_join(st_df[[i]], st_80)
+  st_partition[[i]] <- list(st_80, st_20)
+}
+
+#creat empty lists for holding the predictand (y) and predictor (x) variables
+st_x <- list()
+st_y <- list()
+
+#split data into train and test datasets and partition, result in a list of dataframes
+for (i in seq_along(st_partition)){
+  st_train_y <- st_partition[[i]][[1]]$Depth
+  st_train_x <- as.matrix(st_partition[[i]][[1]][,1:trim_len])
+  st_test_y <- st_partition[[i]][[2]]$Depth
+  st_test_x <- as.matrix(st_partition[[i]][[2]][,1:trim_len])
+  st_x[[i]] <- list(st_train_x, st_test_x)
+  st_y[[i]] <- list(st_train_y, st_test_y)
+}
+
+#create empty lists for output
+st_xgb_train <- list()
+st_xgb_test <- list()
+st_watchlist <- list()
+st_model_test <- list()
+st_model_final <- list()
+st_model_complex <- list()
+st_model_imp <- list()
+st_iter <- list()
+st_pred <- list()
+st_mse <- list()
+st_mae <- list()
+st_rmse <- list()
+
+for (i in seq_along(st_x)){
+  #fit xgboost model to training and testing datasets
+  st_xgb_train[[i]] = xgb.DMatrix(data = st_x[[i]][[1]], label = st_y[[i]][[1]])
+  st_xgb_test[[i]] = xgb.DMatrix(data = st_x[[i]][[2]], label = st_y[[i]][[2]])
+  
+  #define watchlist
+  st_watchlist[[i]] = list(train=st_xgb_train[[i]], test=st_xgb_test[[i]])
+  
+  #fit test xgboost model and display model performance
+  st_model_test[[i]] = xgb.train(data = st_xgb_train[[i]], max.depth = 6, watchlist= st_watchlist[[i]], nrounds = 300, early_stopping_rounds = 3)
+  
+  #use iterations from test model for final model
+  st_iter[[i]] <- st_model_test[[i]]$best_iteration
+  
+  #define final model
+  st_model_final[[i]] = xgboost(data = st_xgb_train[[i]], max.depth = 6, nrounds = st_iter[[i]], verbose = 0)
+  
+  #use model to make estimates from test data
+  st_pred[[i]] = predict(st_model_final[[i]], st_xgb_test[[i]])
+  
+  #model complexity
+  st_model_complex[[i]] = xgb.ggplot.deepness(model=st_model_final[[i]])
+  
+  #model importance
+  st_model_imp[[i]] <- xgb.importance(model=st_model_final[[i]])
+  xgb.ggplot.importance(st_model_imp[[i]])
+  
+  #measure prediction accuracy
+  st_mse[[i]] <- mean((st_y[[i]][[2]] - st_pred[[i]])^2) #mse
+  st_mae[[i]] <- caret::MAE(st_y[[i]][[2]], st_pred[[i]]) #mae
+  st_rmse[[i]] <- caret::RMSE(st_y[[i]][[2]], st_pred[[i]]) #rmse
+}
+
+#save XGB model
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/XGB Models/Static/st")
+st_model_names <- list('st_m1', 'st_m2', 'st_m3', 'st_m4', 'st_m5', 'st_m6', 'st_m7')
+for (i in seq_along(st_model_final)){
+  xgb.save(st_model_final[[i]], st_model_names[[i]])
+}
+
+#Create depth lists for NSE calculations
+st_depths <- list()
+for (i in seq_along(st_pred)){
+  st_depths[[i]] <- list(st_y[[i]][[2]], st_pred[[i]])
+}
+#save depth list for NSE calcs
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/NSE/Depth Lists")
+saveRDS(st_depths, file="st_depths.RData")
+
+#Plotting
+#attach date from earlier list to importance scores
+st_df_imp <- list()
+
+for (i in seq_along(st_model_imp)){
+  st_df_imp[[i]] = as.data.frame(st_model_imp[[i]]) %>%
+    cbind(Date=date_list[[i]])
+}
+
+#merge data to wide dataframe
+st_imp_long <- bind_rows(st_df_imp)
+
+#plot timeseries
+st_fi <- ggplot(st_imp_long, aes(x=Date, y=Importance, group = Feature, Color = Feature))+
+  geom_point()+
+  geom_line()+
+  scale_x_date(date_labels = '%h')+
+  facet_wrap(~Feature)+
+  ggtitle(paste0('UPC ', cntrl_res, ' ', 'Raster ', rstr_type, ': Feature Importance'))+
+  theme_bw()
+
+#st_fi
+```
+
+```{r trim combined plot timeseries, eval=TRUE}
+
+#combine datasets through new column called regime
+st_imp_long <- st_imp_long %>%
+  mutate(Method = 'Static')
+
+dt_imp_long <- dt_imp_long %>%
+  mutate(Method = 'Dynamic')
+
+combined_imp_trim <- st_imp_long %>%
+  rbind(dt_imp_long)
+
+#Plot both importance values on the same graph for better visualization
+
+ggplot(combined_imp_trim, aes(x=Date, y=Importance, group = Method, color = Method))+
+  geom_point()+
+  geom_line()+
+  xlab('Comparison Date')+
+  scale_x_date(date_labels = "%h")+
+  facet_wrap(~Feature)+
+  ggtitle(paste0('UPC ', cntrl_res, ' ', 'Raster ', rstr_type, ': Feature Importance'))+
+  theme_bw()
+
+plot_title <- paste0(rstr_type,cntrl_res,'Trim','.png')
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/Time Series")
+ggsave(plot_title)
+```
+
+```{r dynamic change dataset}
+
+d_df_full <- list()
+dc_df <- list()
+dc_size <- list()
+dc_all_df <- list()
+dc_depth_list <- list()
+change_names <- c('d_x', 'd_y', 'd_Aspect', 'd_CVA', 'd_DME', 'd_DirRel', 'd_ElevPercent', 'd_Fetch205', 'd_HorzAng', 'd_MCurve', 'd_Hillshade', 'd_Northness', 'd_RelAspect', 'd_RTP', 'd_Slope', 'd_TRI')
+
+#check size of dataframes before subtracting
+for (i in seq_along(d_df)){
+  d_df_full[[i]] <- as.data.frame(d_stack[[i]], xy=TRUE)
+  colnames(d_df_full)
+  dc_size[[i]] <- nrow(d_df_full[[i]])
+  if (i==8) {
+    colnames(d_df_full[[i]]) <- d8_names
+  } else {
+    colnames(d_df_full[[i]]) <- d_names
+    dc_depth_list[[i]] <- mean(na.omit(d_df_full[[i]]$Depth))
+    }
+}
+
+for (i in (1:7)){
+  dc_df[[i]] <- d_df_full[[i+1]][,1:16]-d_df_full[[i]][,1:16]
+  colnames(dc_df[[i]]) <- change_names
+  dc_all_df[[i]] <- d_df_full[[i]] %>%
+    cbind(dc_df[[i]]) %>%
+    dplyr::select(-x, -y, -d_x, -d_y) %>%
+    dplyr::select(-Depth, everything()) %>%
+    na.omit()
+}
+
+#Partition data for testing and training
+set.seed(42)
+
+dc_partition <- list()
+
+for (i in seq_along(dc_all_df)){
+  dc_80 <- dc_all_df[[i]] %>%
+    sample_frac(0.8)
+  dc_20 <- anti_join(dc_all_df[[i]], dc_80)
+  dc_partition[[i]] <- list(dc_80, dc_20)
+}
+
+#isolate variables
+#creat empty lists for holding the predictand (y) and predictor (x) variables
+dc_x <- list()
+dc_y <- list()
+
+#split data into train and test datasets and partition, result in a list of dataframes
+for (i in seq_along(dc_partition)){
+  dc_train_y <- dc_partition[[i]][[1]]$Depth
+  dc_train_x <- as.matrix(dc_partition[[i]][[1]][,1:28])
+  dc_test_y <- dc_partition[[i]][[2]]$Depth
+  dc_test_x <- as.matrix(dc_partition[[i]][[2]][,1:28])
+  dc_x[[i]] <- list(dc_train_x, dc_test_x)
+  dc_y[[i]] <- list(dc_train_y, dc_test_y)
+}
+
+#XGB Model
+#create empty lists for output
+dc_xgb_train <- list()
+dc_xgb_test <- list()
+dc_watchlist <- list()
+dc_model_test <- list()
+dc_model_final <- list()
+dc_model_complex <- list()
+dc_model_imp <- list()
+dc_iter <- list()
+dc_pred <- list()
+dc_mse <- list()
+dc_mae <- list()
+dc_rmse <- list()
+dc_depths <- list()
+
+for (i in seq_along(dc_x)){
+  #fit xgboost model to training and testing datasets
+  dc_xgb_train[[i]] = xgb.DMatrix(data = dc_x[[i]][[1]], label = dc_y[[i]][[1]])
+  dc_xgb_test[[i]] = xgb.DMatrix(data = dc_x[[i]][[2]], label = dc_y[[i]][[2]])
+  
+  #define watchlist
+  dc_watchlist[[i]] = list(train=dc_xgb_train[[i]], test=dc_xgb_test[[i]])
+  
+  #fit test xgboost model and display model performance
+  dc_model_test[[i]] = xgb.train(data = dc_xgb_train[[i]], max.depth = 6, watchlist=dc_watchlist[[i]], nrounds = 300, early_stopping_rounds = 3)
+  
+  #use iterations from test model for final model
+  dc_iter[[i]] <- dc_model_test[[i]]$best_iteration
+  
+  #define final model
+  dc_model_final[[i]] = xgboost(data = dc_xgb_train[[i]], max.depth = 6, nrounds = dc_iter[[i]], verbose = 0)
+  
+  #use model to make estimates from test data
+  dc_pred[[i]] = predict(dc_model_final[[i]], dc_xgb_test[[i]])
+  
+  #model complexity
+  dc_model_complex[[i]] = xgb.ggplot.deepness(model=dc_model_final[[i]])
+  
+  #model importance
+  dc_model_imp[[i]] <- xgb.importance(model=dc_model_final[[i]])
+  xgb.ggplot.importance(dc_model_imp[[i]])
+  
+  #measure prediction accuracy
+  dc_mse[[i]] <- mean((dc_y[[i]][[2]] - dc_pred[[i]])^2) #mse
+  dc_mae[[i]] <- caret::MAE(dc_y[[i]][[2]], dc_pred[[i]]) #mae
+  dc_rmse[[i]] <- caret::RMSE(dc_y[[i]][[2]], dc_pred[[i]]) #rmse
+  
+}
+
+#save xgb model
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/XGB Models/Dynamic/dc")
+dc_model_names <- list('dc_m1', 'dc_m2', 'dc_m3', 'dc_m4', 'dc_m5', 'dc_m6', 'dc_m7')
+for (i in seq_along(dc_model_final)){
+  xgb.save(dc_model_final[[i]], dc_model_names[[i]])
+}
+
+#Create depth lists for NSE calculations
+dc_depths <- list()
+for (i in seq_along(dc_pred)){
+  dc_depths[[i]] <- list(dc_y[[i]][[2]], dc_pred[[i]])
+}
+#save depth list for NSE calcs
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/NSE/Depth Lists")
+saveRDS(dc_depths, file="dc_depths.RData")
+
+#Plot timeseries
+#attach date from earlier list to importance scores
+dc_df_imp <- list()
+
+for (i in seq_along(dc_model_imp)){
+  dc_df_imp[[i]] = as.data.frame(dc_model_imp[[i]]) %>%
+    cbind(Date=date_list[[i]])
+}
+
+#merge data to wide dataframe
+dc_imp_long <- bind_rows(dc_df_imp)
+
+#Filter features with max importance score over 10%
+dc_imp_filt <- dc_imp_long %>%
+  group_by(Feature) %>%
+  summarize(minImp = min(Importance),
+            maxImp = max(Importance),
+            meanImp = mean(Importance)) %>%
+  filter(., maxImp > 0.1)
+
+dc_imp_filtvars <- dc_imp_filt$Feature %>%
+  append('Depth')
+
+#plot timeseries
+dc_fi <- ggplot(dc_imp_long, aes(x=Date, y=Importance, group = Feature, Color = Feature))+
+  geom_point()+
+  geom_line()+
+  scale_x_date(date_labels = '%h')+
+  facet_wrap(~Feature)+
+  ggtitle(paste0('UPC ', cntrl_res, ' ', 'Raster ', rstr_type, ': Feature Importance'))+
+  theme_bw()
+
+#dc_fi
+```
+
+
+```{r dynamic change trim dataset}
+
+dc_trim <- list()
+for (i in seq_along(dc_all_df)){
+  dc_trim[[i]] = dc_all_df[[i]] %>%
+  dplyr::select(all_of(dc_imp_filtvars))
+}
+
+dct_vars <- (length(dc_imp_filtvars)-1)
+
+set.seed(42)
+
+#creates empty list for storage
+dct_partition <- list()
+
+#partition data for testing and training, no replacement
+for (i in seq_along(dc_trim)){
+  dct_80 <- dc_trim[[i]] %>%
+    sample_frac(0.8)
+  dct_20 <- anti_join(dc_trim[[i]], dct_80)
+  dct_partition[[i]] <- list(dct_80, dct_20)
+}
+
+#creat empty lists for holding the predictand (y) and predictor (x) variables
+dct_x <- list()
+dct_y <- list()
+
+#split data into train and test datasets and partition, result in a list of dataframes
+for (i in seq_along(dct_partition)){
+  dct_train_y <- dct_partition[[i]][[1]]$Depth
+  dct_train_x <- as.matrix(dct_partition[[i]][[1]][,1:dct_vars])
+  dct_test_y <- dct_partition[[i]][[2]]$Depth
+  dct_test_x <- as.matrix(dct_partition[[i]][[2]][,1:dct_vars])
+  dct_x[[i]] <- list(dct_train_x, dct_test_x)
+  dct_y[[i]] <- list(dct_train_y, dct_test_y)
+}
+
+#create empty lists for xgboost output
+dct_xgb_train <- list()
+dct_xgb_test <- list()
+dct_watchlist <- list()
+dct_model_test <- list()
+dct_model_final <- list()
+dct_model_complex <- list()
+dct_model_imp <- list()
+dct_iter <- list()
+dct_pred <- list()
+dct_mse <- list()
+dct_mae <- list()
+dct_rmse <- list()
+dct_depths <- list()
+
+for (i in seq_along(dct_x)){
+  #fit xgboost model to training and testing datasets
+  dct_xgb_train[[i]] = xgb.DMatrix(data = dct_x[[i]][[1]], label = dct_y[[i]][[1]])
+  dct_xgb_test[[i]] = xgb.DMatrix(data = dct_x[[i]][[2]], label = dct_y[[i]][[2]])
+  
+  #define watchlist
+  dct_watchlist[[i]] = list(train=dct_xgb_train[[i]], test=dct_xgb_test[[i]])
+  
+  #fit test xgboost model and display model performance
+  dct_model_test[[i]] = xgb.train(data = dct_xgb_train[[i]], max.depth = 6, watchlist=dct_watchlist[[i]], nrounds = 300, early_stopping_rounds = 3)
+  
+  #use iterations from test model for final model
+  dct_iter[[i]] <- dct_model_test[[i]]$best_iteration
+  
+  #define final model
+  dct_model_final[[i]] = xgboost(data = dct_xgb_train[[i]], max.depth = 6, nrounds = dct_iter[[i]], verbose = 0)
+  
+  #use model to make estimates from test data
+  dct_pred[[i]] = predict(dct_model_final[[i]], dct_xgb_test[[i]])
+  
+  #model complexity
+  dct_model_complex[[i]] = xgb.ggplot.deepness(model=dct_model_final[[i]])
+  
+  #model importance
+  dct_model_imp[[i]] <- xgb.importance(model=dct_model_final[[i]])
+  xgb.ggplot.importance(dct_model_imp[[i]])
+  
+  #measure prediction accuracy
+  dct_mse[[i]] <- mean((dct_y[[i]][[2]] - dct_pred[[i]])^2) #mse
+  dct_mae[[i]] <- caret::MAE(dct_y[[i]][[2]], dct_pred[[i]]) #mae
+  dct_rmse[[i]] <- caret::RMSE(dct_y[[i]][[2]], dct_pred[[i]]) #rmse
+  
+}
+
+#save xgb model
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/XGB Models/Dynamic/dct")
+dct_model_names <- list('dct_m1', 'dct_m2', 'dct_m3', 'dct_m4', 'dct_m5', 'dct_m6', 'dct_m7')
+for (i in seq_along(dct_model_final)){
+  xgb.save(dct_model_final[[i]], dct_model_names[[i]])
+}
+
+#Create depth lists for NSE calculations
+dct_depths <- list()
+for (i in seq_along(dct_pred)){
+  dct_depths[[i]] <- list(dct_y[[i]][[2]], dct_pred[[i]])
+}
+#save depth list for NSE calcs
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/NSE/Depth Lists")
+saveRDS(dct_depths, file="dct_depths.RData")
+
+#attach date from earlier list to importance scores
+dct_imp <- list()
+
+for (i in seq_along(dct_model_imp)){
+  dct_imp[[i]] = as.data.frame(dct_model_imp[[i]]) %>%
+    cbind(Date=date_list[[i]])
+}
+
+#merge data to wide dataframe
+dct_imp_long <- bind_rows(dct_imp)
+
+dct_imp_filt <- dct_imp_long %>%
+  group_by(Feature) %>%
+  summarize(minImp = min(Importance),
+            maxImp = max(Importance),
+            meanImp = mean(Importance)) %>%
+  filter(., maxImp > 0.1)
+
+#plot timeseries
+dct_fi <- ggplot(dct_imp_long, aes(x=Date, y=Importance, group = Feature, Color = Feature))+
+  geom_point()+
+  geom_line()+
+  scale_x_date(date_labels = '%h')+
+  facet_wrap(~Feature)+
+  ggtitle(paste0('UPC ', cntrl_res, ' ', 'Raster ', rstr_type, ': Feature Importance'))+
+  theme_bw()  
+
+dct_fi
+plot_title <- paste0('dct', rstr_type,cntrl_res, '.png')
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/Time Series")
+ggsave(plot_title)
+
+#Plot dct along with st and dt (where applicable)
+dct_imp_filt <- dct_imp_long %>%
+  dplyr::filter(Feature %in% c('CVA', 'DirRel', 'Fetch205', 'Hillshade', 'RelAspect')) %>%
+  mutate(Method = 'dct')
+
+trim_all <- combined_imp_trim %>%
+  rbind(dct_imp_filt)
+
+ggplot(trim_all, aes(x=Date, y=Importance))+
+  geom_point(aes(color = Method))+
+  geom_line(aes(color = Method))+
+  scale_x_date(date_labels = '%h')+
+  facet_wrap(~Feature)+
+  ggtitle(paste0('UPC ', cntrl_res, ' ', 'Raster ', rstr_type, ': Feature Importance'))+
+  theme_bw()
+```
+
+```{r conditional for saving output}
+
+#populates correct dataframe depending on resultion and raster extent
+if (cntrl_res=='1cm' && rstr_type == 'Full') {
+res_sum_1cm <- combined_imp
+res_sum_1cm_trim <- combined_imp_trim
+} else if (cntrl_res=='5cm' && rstr_type == 'Full') {
+res_sum_5cm <- combined_imp
+res_sum_5cm_trim <- combined_imp_trim
+} else if (cntrl_res=='10cm' && rstr_type == 'Full') {
+res_sum_10cm <- combined_imp
+res_sum_10cm_trim <- combined_imp_trim
+} else if (cntrl_res=='1cm' && rstr_type == 'Crop') {
+res_sum_1cm_crop <- combined_imp
+res_sum_1cm_crop_trim <- combined_imp_trim
+} else if (cntrl_res=='5cm' && rstr_type == 'Crop') {
+res_sum_5cm_crop <- combined_imp
+res_sum_5cm_crop_trim <- combined_imp_trim
+} else if (cntrl_res=='10cm' && rstr_type == 'Crop') {
+res_sum_10cm_crop <- combined_imp
+res_sum_10cm_crop_trim <- combined_imp_trim
+}
+
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/Resolution Summaries")
+saveRDS(res_sum_1cm, file = 'ResSum1FA.RDS') 
+saveRDS(res_sum_1cm_trim, file = 'ResSum1FT.RDS')
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/Resolution Summaries/Dynamic Change Model")
+saveRDS(dc_imp_long, file = 'dc_ResSum1FT.RDS')
+saveRDS(dct_imp_long, file = 'dct_ResSum1FT.RDS')
+```
+
+```{r build results dataframe}
+
+#Full All
+importance_1cm <- res_sum_1cm %>%
+  mutate(Resolution = '1 cm')
+importance_5cm <- res_sum_5cm %>%
+  mutate(Resolution = '5 cm')
+importance_10cm <- res_sum_10cm %>%
+  mutate(Resolution = '10 cm')
+
+importance_all_res <- importance_1cm %>%
+  rbind(importance_5cm, importance_10cm)
+
+#reorder resolution column for plotting
+importance_all_res$Resolution <- factor(importance_all_res$Resolution, levels = c('1 cm', '5 cm', '10 cm'))
+
+#setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/Importance Summaries")
+#save dataframe
+#saveRDS(importance_all_res, file = 'UPC_Importance_FA.RDS') 
+
+static_res <- importance_all_res %>%
+  filter(Method == 'Static')
+
+dynamic_res <- importance_all_res %>%
+  filter(Method == 'Dynamic')
+
+#Full Trim
+importance_1cm_trim <- res_sum_1cm_trim %>%
+  mutate(Resolution = '1 cm')
+importance_5cm_trim <- res_sum_5cm_trim %>%
+  mutate(Resolution = '5 cm')
+importance_10cm_trim <- res_sum_10cm_trim %>%
+  mutate(Resolution = '10 cm')
+
+importance_all_res_trim <- importance_1cm_trim %>%
+  rbind(importance_5cm_trim, importance_10cm_trim)
+
+#reorder resolution column for plotting
+importance_all_res_trim$Resolution <- factor(importance_all_res_trim$Resolution, levels = c('1 cm', '5 cm', '10 cm'))
+
+#saveRDS(importance_all_res_trim, file = 'UPC_Importance_FT.RDS') 
+
+static_res_trim <- importance_all_res_trim %>%
+  filter(Method == 'Static')
+
+dynamic_res_trim <- importance_all_res_trim %>%
+  filter(Method == 'Dynamic')
+
+#Crop All
+importance_1cm_crop <- res_sum_1cm_crop %>%
+  mutate(Resolution = '1 cm')
+importance_5cm_crop <- res_sum_5cm_crop %>%
+  mutate(Resolution = '5 cm')
+importance_10cm_crop <- res_sum_10cm_crop %>%
+  mutate(Resolution = '10 cm')
+
+importance_all_res_crop <- importance_1cm_crop %>%
+  rbind(importance_5cm_crop, importance_10cm_crop)
+
+#reorder resolution column for plotting
+importance_all_res_crop$Resolution <- factor(importance_all_res_crop$Resolution, levels = c('1 cm', '5 cm', '10 cm'))
+
+#save dataframe
+#saveRDS(importance_all_res_crop, file = 'UPC_Importance_CA.RDS') 
+
+static_res_crop <- importance_all_res_crop %>%
+  filter(Method == 'Static')
+
+dynamic_res_crop <- importance_all_res_crop %>%
+  filter(Method == 'Dynamic')
+
+#Crop Trim
+importance_1cm_crop_trim <- res_sum_1cm_crop_trim %>%
+  mutate(Resolution = '1 cm')
+importance_5cm_crop_trim <- res_sum_5cm_crop_trim %>%
+  mutate(Resolution = '5 cm')
+importance_10cm_crop_trim <- res_sum_10cm_crop_trim %>%
+  mutate(Resolution = '10 cm')
+
+importance_all_res_crop_trim <- importance_1cm_crop_trim %>%
+  rbind(importance_5cm_crop_trim, importance_10cm_crop_trim)
+
+#reorder resolution column for plotting
+importance_all_res_crop_trim$Resolution <- factor(importance_all_res_crop_trim$Resolution, levels = c('1 cm', '5 cm', '10 cm'))
+
+#saveRDS(importance_all_res_crop_trim, file = 'UPC_Importance_CT.RDS') 
+
+static_res_crop_trim <- importance_all_res_crop_trim %>%
+  filter(Method == 'Static')
+
+dynamic_res_crop_trim <- importance_all_res_crop_trim %>%
+  filter(Method == 'Dynamic')
+
+```
+
+```{r condense results to single dataframe}
+#need to load data from saved folder
+UPC_FA <- UPC_Importance_FA %>%
+  mutate(Extent = 'Full',
+         Params = 'All',
+         Form = 'FA')
+UPC_FT <- UPC_Importance_FT %>%
+  mutate(Extent = 'Full',
+         Params = 'Trim',
+         Form = 'FT')
+UPC_CA <- UPC_Importance_CA %>%
+  mutate(Extent = 'Crop',
+         Params = 'All',
+         Form = 'CA')
+UPC_CT <- UPC_Importance_CT %>%
+  mutate(Extent = 'Crop',
+         Params = 'Trim',
+         Form = 'CT')
+
+UPC_importance_wide <- UPC_FA %>%
+  rbind(UPC_FT, UPC_CA, UPC_CT)
+
+#filter trimmed variables
+#out_vars <- c('DME', 'Hillshade', 'Northness', 'Slope', 'Aspect')
+#UPC_importance_filter <- UPC_importance_wide %>%
+  #dplyr::filter(!Feature %in% out_vars)
+
+#Violin plot by data form (CA, CT, FA, FT)
+ggplot(UPC_importance_wide, aes(x=Form, y=Importance, color = Method, fill = Method))+
+  geom_point(size=0.6, aes(color=Method, alpha=0.6), position = position_jitter(seed = 42, width = 0.1)) +
+  geom_violin(alpha=0.7)+
+  facet_wrap(~Feature)+
+  theme_bw()
+
+
+#Histogram of importance score to see where breaks occur
+ggplot(UPC_importance_wide)+
+  geom_histogram(bins= 30, aes(x=Importance))+
+  theme_bw()+
+  xlim(0,0.25)
+
+#Violin plot filtered (imp > .10, count > 5) by form (CA, CT, FA, FT)
+UPC_imp_filt <- UPC_importance_wide %>%
+  dplyr::filter(Importance>0.10) %>%
+  group_by(Feature, Method, Form) %>%
+  mutate(Count = n()) %>%
+  dplyr::filter(Count>4)
+
+#Plot violin after importance filter
+ggplot(UPC_imp_filt, aes(x=Form, y=Importance, color = Method, fill = Method))+
+  #geom_dotplot(size=0.2, binaxis='y', stackdir='center', position=position_dodge(1), aes(alpha=0.6))+
+  geom_point(size=0.6, aes(color=Method, alpha=0.6)) +
+  #position = position_jitter(seed = 42, width = 0.1)
+  #geom_boxplot(width=0.1)+
+  geom_violin(alpha=0.7)+
+  facet_wrap(~Feature)+
+  theme_bw()+
+  ggtitle('Importance > 0.10, n >= 5')
+
+```
+
+```{r NSE Processing}
+#load depth lists from previous processing
+#1cm Full
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/NSE/Depth Lists/1cmFull")
+d_depths <- readRDS('d_depths.RData')
+s_depths <- readRDS('s_depths.RData')
+dt_depths <- readRDS('dt_depths.RData')
+st_depths <- readRDS('st_depths.RData')
+dc_depths <- readRDS('dc_depths.RData')
+dct_depths <- readRDS('dct_depths.RData')
+
+#5cm Full
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/NSE/Depth Lists/5cmFull")
+d_depths <- readRDS('d_depths.RData')
+s_depths <- readRDS('s_depths.RData')
+dt_depths <- readRDS('dt_depths.RData')
+st_depths <- readRDS('st_depths.RData')
+dc_depths <- readRDS('dc_depths.RData')
+dct_depths <- readRDS('dct_depths.RData')
+
+#10cm Full
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/NSE/Depth Lists/10cmFull")
+d_depths <- readRDS('d_depths.RData')
+s_depths <- readRDS('s_depths.RData')
+dt_depths <- readRDS('dt_depths.RData')
+st_depths <- readRDS('st_depths.RData')
+dc_depths <- readRDS('dc_depths.RData')
+dct_depths <- readRDS('dct_depths.RData')
+
+#1cm Crop
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/NSE/Depth Lists/10cmCrop")
+d_depths <- readRDS('d_depths.RData')
+s_depths <- readRDS('s_depths.RData')
+dt_depths <- readRDS('dt_depths.RData')
+st_depths <- readRDS('st_depths.RData')
+dc_depths <- readRDS('dc_depths.RData')
+dct_depths <- readRDS('dct_depths.RData')
+
+#5cm Crop
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/NSE/Depth Lists/5cmCrop")
+d_depths <- readRDS('d_depths.RData')
+s_depths <- readRDS('s_depths.RData')
+dt_depths <- readRDS('dt_depths.RData')
+st_depths <- readRDS('st_depths.RData')
+dc_depths <- readRDS('dc_depths.RData')
+dct_depths <- readRDS('dct_depths.RData')
+
+#10cm Crop
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/NSE/Depth Lists/10cmCrop")
+d_depths <- readRDS('d_depths.RData')
+s_depths <- readRDS('s_depths.RData')
+dt_depths <- readRDS('dt_depths.RData')
+st_depths <- readRDS('st_depths.RData')
+dc_depths <- readRDS('dc_depths.RData')
+dct_depths <- readRDS('dct_depths.RData')
+
+
+#full extent
+s_NSE <- list()
+d_NSE <- list()
+st_NSE <- list()
+dt_NSE <- list()
+dc_NSE <- list()
+dct_NSE <- list()
+
+#calculate NSE
+#need to implement this for the following lists after all models are run
+#s_depths_FA, s_depths_FT, d_depths_FA, d_depths_FT, s_depths_CA, s_depths_CT, d_depths_CA, d_depths_CT
+#condense the previously listed (format: [1] - obs [2] - simulated to a larger list so i dont have to create 8 loops
+
+#NSE function is of the form NSE(sim, obs)
+for (i in seq_along(s_depths)){
+  s_NSE[[i]] = NSE(s_depths[[i]][[2]], s_depths[[i]][[1]])
+  d_NSE[[i]] = NSE(d_depths[[i]][[2]], d_depths[[i]][[1]])
+  st_NSE[[i]] = NSE(st_depths[[i]][[2]], st_depths[[i]][[1]])
+  dt_NSE[[i]] = NSE(dt_depths[[i]][[2]], dt_depths[[i]][[1]])
+  dc_NSE[[i]] = NSE(dc_depths[[i]][[2]], dc_depths[[i]][[1]])
+  dct_NSE[[i]] = NSE(dct_depths[[i]][[2]], dct_depths[[i]][[1]])
+}
+
+#create dataframes
+df_NSE <- list()
+df_NSE_trim <- list()
+df_NSE_change <- list()
+
+NSE_names <- c('Static NSE', 'Static Avg Depth', 'Dynamic NSE', 'Dyn Avg Depth', 'Date')
+NSE_change_names <- c('dcNSE', 'dc Avg Depth', 'dctNSE', 'Date')
+
+for (i in seq_along(s_NSE)){
+   df_NSE[[i]] = as.data.frame(s_NSE[[i]]) %>%
+     cbind(s_depth_list[[i]], d_NSE[[i]], d_depth_list[[i]], date_list[[i]])
+   colnames(df_NSE[[i]]) <- NSE_names
+   
+   df_NSE_trim[[i]] = as.data.frame(st_NSE[[i]]) %>%
+     cbind(s_depth_list[[i]], dt_NSE[[i]], d_depth_list[[i]], date_list[[i]])
+   colnames(df_NSE_trim[[i]])  <- NSE_names
+   
+   df_NSE_change[[i]] = as.data.frame(dc_NSE[[i]]) %>%
+     cbind(dc_depth_list[[i]], dct_NSE[[i]], date_list[[i]])
+   colnames(df_NSE_change[[i]])  <- NSE_change_names
+   
+}  
+
+df_NSE_all <- bind_rows(df_NSE) %>%
+   mutate(Vars='All',
+          Extent= rstr_type,
+          Resolution = cntrl_res)
+ 
+df_NSE_trim_all <- bind_rows(df_NSE_trim) %>%
+   mutate(Vars='Trim',
+          Extent= rstr_type,
+          Resolution = cntrl_res)  
+ 
+df_NSE_change <- bind_rows(df_NSE_change) %>%
+   mutate(Vars='Change',
+          Extent= rstr_type,
+          Resolution = cntrl_res)  
+
+#combine to single df
+df_NSE_combined <- df_NSE_all %>%
+  rbind(df_NSE_trim_all)
+
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/NSE/NSE Dataframes")
+saveRDS(df_NSE_combined, file = 'NSE_1cm_Crop.RDS') 
+saveRDS(df_NSE_change, file = 'NSE_change_1cmCrop.RDS')
+```
+
+```{r NSE Plots}
+#load NSE dataframes from directory before proceeding
+
+
+NSE_all <- NSE_10cm %>%
+  rbind(NSE_5cm, NSE_1cm, NSE_10cm_Crop, NSE_5cm_Crop, NSE_1cm_Crop)
+
+NSE_all$Date <- lubridate::ymd(NSE_all$Date)
+NSE_all$Resolution <- factor(NSE_all$Resolution, levels = c('1cm', '5cm', '10cm'))
+
+NSE_all_long <- NSE_all %>%
+    pivot_longer(cols = c('Static NSE':'Dyn Avg Depth'),
+               names_to = 'Feature',
+               values_to = 'Value')
+
+NSE_FA <- NSE_all_long %>%
+  dplyr::filter(Extent == 'Full',
+                Vars == 'All')
+
+NSE_FT <- NSE_all_long %>%
+  dplyr::filter(Extent == 'Full',
+                Vars == 'Trim')
+
+NSE_CA <- NSE_all_long %>%
+  dplyr::filter(Extent == 'Crop',
+                Vars == 'All')
+
+NSE_CT <- NSE_all_long %>%
+  dplyr::filter(Extent == 'Crop',
+                Vars == 'Trim')
+
+#Change Datasets
+NSE_change_all <- NSE_change_10cm %>%
+  rbind(NSE_change_5cm, NSE_change_1cm, NSE_change_10cmCrop, NSE_change_5cmCrop, NSE_change_1cmCrop)
+
+NSE_change_all$Date <- lubridate::ymd(NSE_change_all$Date)
+NSE_change_all$Resolution <- factor(NSE_change_all$Resolution, levels = c('1cm', '5cm', '10cm'))
+
+
+#plotting
+setwd("C:/Users/aolse/Desktop/Research/R/Research_SnowAccum/output/UPC/Current Model/NSE/plots")
+NSE_CT <- NSE_CT %>%
+  dplyr::filter(Feature %in% c('Static NSE', 'Dynamic NSE'))
+
+  ggplot(NSE_CT, aes(x=Date, y=Value, color = Feature))+
+    geom_line()+
+    geom_point()+
+    facet_wrap(~Resolution)+
+    ggtitle('UPC: Crop-Trim')+
+    ylim(0,1)+
+    theme_bw()
+
+ggsave('NSE_CT.png')
+
+ggplot(NSE_change_all, aes(x=Date, y=dcNSE, color=Extent))+
+    geom_line()+
+    geom_point()+
+    facet_wrap(~Resolution)+
+    ggtitle('UPC All Vars: Dynamic NSE w/Change')+
+    ylim(0,1)+
+    theme_bw()
+
+ggsave('NSE_dc.png')
+
+ggplot(NSE_change_all, aes(x=Date, y=dctNSE, color=Extent))+
+    geom_line()+
+    geom_point()+
+    facet_wrap(~Resolution)+
+    ggtitle('UPC Trim: Dynamic NSE w/Change')+
+    ylim(0,1)+
+    theme_bw()
+ggsave('NSE_dct.png')
+
+```
+
+```{r full plot}
+
+UPC_Importance_CT %>%
+  filter(Method == 'Static') %>%
+  ggplot(aes(x=Date, y=Importance))+
+  geom_line(aes(color=Resolution))+
+  geom_point(aes(color=Resolution))+
+  ggtitle('Static CT')+
+  ylim(0,1)+
+  facet_wrap(~Feature)+
+  theme_bw()
+
+UPC_Importance_CT %>%
+  filter(Method == 'Dynamic') %>%
+  ggplot(aes(x=Date, y=Importance))+
+  geom_line(aes(color=Resolution))+
+  geom_point(aes(color=Resolution))+
+  ggtitle('Dynamic Full Raster - Trim Vars')+
+  ylim(0,1)+
+  facet_wrap(~Feature)+
+  theme_bw()
+
+#Dynamic Resolution Plot
+ggplot(dynamic_res, aes(x=Date, y=Importance))+
+  geom_line(aes(color=Resolution))+
+  geom_point(aes(color=Resolution))+
+  ggtitle('UPC Dynamic Crop: Feature Importance')+
+  facet_wrap(~Feature)+
+  theme_bw()
+
+#Histogram by Feature
+ggplot(importance_all_res, aes(x=Importance, fill=Method))+
+  geom_histogram(bins = 15, position = 'dodge')+
+  facet_wrap(~Feature)
+
+#Histogram by Method
+ggplot(importance_all_res, aes(x=Importance))+
+  geom_histogram(bins = 10)+
+  facet_wrap(~Method)
+
+#Histogram by Method
+ggplot(importance_all_res, aes(x=Importance, fill=Resolution))+
+  geom_histogram(bins = 5, position = 'dodge')+
+  facet_wrap(~Method)
+
+#Violin Plot
+ggplot(UPC_Clean_Importance_Trim, aes(x=Method, y=Importance, fill=Method))+
+  geom_point(aes(color=Method, alpha=0.6), position = position_jitter(seed = 42, width = 0.2)) +
+  geom_violin(alpha=0.7)+
+  ggtitle('Full Raster - Trim Vars')+
+  ylim(0,1)+
+  facet_wrap(~Resolution)+
+  theme_bw()
+
+#boxplot
+ggplot(data = UPC_Crop_Importance, aes(x=Feature, y=Importance, fill=Method, color=Method))+
+  geom_boxplot(alpha=0.6, outlier.shape = NA)+
+  #geom_point(size=2, position = position_dodge(width = 1), aes(shape=factor(Comparison), color=Regime))+
+  #geom_point(aes(color=Method), size=0.2)+
+  #geom_line(aes(group=Label, color=Regime))+
+  #geom_text(size = 3.25, check_overlap = TRUE, aes(fontface=2))+
+  scale_x_discrete(guide = guide_axis(n.dodge=2))+
+  ylim(0,1)+
+  labs(y= 'Feature Importance', color = 'Method')+
+  ggtitle('Crop Raster - All Vars')+
+  facet_wrap(~Resolution)+
+  theme_bw()+
+  theme(axis.text.x=element_blank())
+
+```
+
+```{r trim plot}
+
+
+#Static Resolution Plot
+ggplot(static_res_trim, aes(x=Date, y=Importance))+
+  geom_line(aes(color=Resolution))+
+  geom_point(aes(color=Resolution))+
+  ggtitle('UPC Static: Feature Importance')+
+  facet_wrap(~Feature)+
+  theme_bw()
+
+#Dynamic Resolution Plot
+ggplot(dynamic_res_trim, aes(x=Date, y=Importance))+
+  geom_line(aes(color=Resolution))+
+  geom_point(aes(color=Resolution))+
+  ggtitle('UPC Dynamic: Feature Importance')+
+  facet_wrap(~Feature)+
+  theme_bw()
+
+
+#Violin Plot
+ggplot(importance_all_res_trim, aes(x=Method, y=Importance, fill=Method))+
+  geom_point(aes(color=Method, alpha=0.6), position = position_jitter(seed = 42, width = 0.2)) +
+  geom_violin(alpha=0.7)+
+  ggtitle('UPC: Importance Distributions')+
+  #facet_wrap(~Resolution)+
+  theme_bw()
+
+#boxplot
+ggplot(data = importance_all_res_trim, aes(x=Feature, y=Importance, fill=Method, color=Method))+
+  geom_boxplot(alpha=0.6, outlier.shape = NA)+
+  #geom_point(size=2, position = position_dodge(width = 1), aes(shape=factor(Comparison), color=Regime))+
+  #geom_point(aes(color=Method), size=0.2)+
+  #geom_line(aes(group=Label, color=Regime))+
+  #geom_text(size = 3.25, check_overlap = TRUE, aes(fontface=2))+
+  scale_x_discrete(guide = guide_axis(n.dodge=2))+
+  #ylim(0,1)+
+  labs(y= 'Feature Importance', color = 'Method')+
+  ggtitle('UPC: Feature Importance')+
+  facet_wrap(~Resolution)+
+  theme_bw()+
+  theme(axis.text.x=element_blank())
+
+```
+
+```{r shapley analysis}
+
+dyn_x_trim_smpl <- dyn_x_trim[[3]][[2]][sample(nrow(dyn_x_trim[[3]][[2]]), 300), ]
+
+shp_d3_trim <- shapviz::shapviz(d_model_final_trim[[3]], X_pred = dyn_x_trim_smpl, interactions = TRUE)
+
+sv_importance(shp_d3_trim)
+sv_importance(shp_d3_trim, kind = "beeswarm")
+sv_dependence(shp_d3_trim, v = "CVA")
+
+sv_interaction(shp_d3_trim) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+```
+
+
+```{r histograms topo parameter distributions}
+library(Hmisc)
+
+#attach date from earlier list to importance scores
+test_hist <- list()
+train_hist <- list()
+
+#regroup data to trainins sets and testing sets that are separate
+for (i in seq_along(partition_list)){
+  test_hist[[i]] = partition_list[[i]][[1]]
+  train_hist[[i]] = partition_list[[i]][[2]]
+}
+
+#remove x and y columns
+train_hist <- map(train_hist, ~ (.x %>%
+                                   dplyr::select(-x, -y)))
+
+test_hist <- map(test_hist, ~ (.x %>%
+                                   dplyr::select(-x, -y)))
+
+#plot histograms
+# hist.data.frame(train_hist[[1]])
+# hist.data.frame(test_hist[[1]])
+# 
+# hist.data.frame(train_hist[[2]])
+# hist.data.frame(test_hist[[2]])
+# 
+# hist.data.frame(train_hist[[3]])
+# hist.data.frame(test_hist[[3]])
+
+#combines all columns and does a single qqplot
+# qqplots <- purrr::imap(test_hist[[3]], ~{
+#   ggplot(test_hist[[3]], aes(sample = .data[[.y]])) + # Create QQplot with ggplot2 package
+#     theme(plot.title = element_text(hjust = 0.5)) +
+#     stat_qq() +
+#     stat_qq_line(col = "red", lwd = 0.5)
+# })
+# 
+# qqplots
+
+#tidyverse
+test_hist_long <- test_hist[[1]] %>%
+  pivot_longer(names_to = 'Feature', values_to = 'Value', 1:14)
+
+#plot
+test_hist_1 <- ggplot(test_hist_long, aes(sample = Value, color='red', alpha = 0.5)) +
+  facet_wrap(~ Feature, scales = "free") +
+  stat_qq() +
+  stat_qq_line()
+
+test_hist_1
+
+train_hist_long <- train_hist[[1]] %>%
+  pivot_longer(names_to = 'Feature', values_to = 'Value', 1:14)
+
+#plot
+train_hist_1 <- ggplot(train_hist_long, aes(sample = Value)) +
+  facet_wrap(~ Feature, scales = "free") +
+  stat_qq() +
+  stat_qq_line()
+
+train_hist_1
+```
+
+
